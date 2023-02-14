@@ -4,16 +4,75 @@
   (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.Vue = factory());
 })(this, (function () { 'use strict';
 
+  // 对模板进行编译
+  function compileToFunction(template) {
+    // 1. 就是将 template 转化成 ast 语法树
+
+    // 2. 生成 render 方法（render方法执行后的返回值的结果就是虚拟 dom）
+    console.log(template);
+  }
+
+  // 我们希望重写数组中的部分方法
+
+  let oldArrayProto = Array.prototype; // 获取数组的原型
+
+  // newArrayProto.__proto__ = oldArrayProto;
+  let newArrayProto = Object.create(oldArrayProto);
+  let methods = [
+  // 找到所有的变异方法
+  'push', 'pop', 'shift', 'unshift', 'revese', 'sort', 'splice']; // concat slice 都不会改变原数组
+
+  methods.forEach(method => {
+    newArrayProto[method] = function (...args) {
+      // 这里重写了数组的方法
+      const result = oldArrayProto[method].call(this, ...args); // this 指向调用者 内部调用原来的方法，函数的劫持 切片编程
+
+      // 我们需要对新增的数据再次进行劫持
+      let inserted;
+      let ob = this.__ob__;
+      switch (method) {
+        case 'push':
+        case 'unshift':
+          inserted = args;
+          break;
+        case 'splice':
+          inserted = args.slice(2);
+          break;
+      }
+      if (inserted) {
+        // 对新增的内容再次进行观测
+        ob.ObserveArray(inserted);
+      }
+      return result;
+    };
+  });
+
   class Observe {
     constructor(data) {
       // Object.defineProperty 只能劫持已经存在的属性（vue里面会为此单独写一些 api $set $delete）
 
-      this.walk(data);
+      Object.defineProperty(data, '__ob__', {
+        value: this,
+        enumerable: false // 将__ob__变成不可枚举 （循环的时候无法获取到）
+      });
+
+      // data.__ob__ = this; // 给数据加了个标识 如果数据上有 __ob__ 就说明这个数据被观测过
+      if (Array.isArray(data)) {
+        // 这里我们可以重写数组中的方法 7个变异方法 是可以修改数组本身的
+        // 覆盖自身原型方法，优先找自身原型方法，然后去 数组原型找
+        data.__proto__ = newArrayProto; // 需要保留数组原有的特效，并且可以重写部分方法
+        this.ObserveArray(data); // 如果数组中放的是对象，可以监控到对象的变化
+      } else {
+        this.walk(data);
+      }
     }
     walk(data) {
       // 循环对象 对属性依次劫持
       // 重新定义属性
       Object.keys(data).forEach(key => defineReactive(data, key, data[key]));
+    }
+    ObserveArray(data) {
+      data.forEach(item => observe(item));
     }
   }
   function defineReactive(target, key, value) {
@@ -27,6 +86,7 @@
       set(newValue) {
         // 修改的时候 会执行 set
         if (newValue === value) return;
+        observe(newValue);
         value = newValue;
       }
     });
@@ -36,6 +96,11 @@
 
     if (typeof data !== 'object' || data == null) {
       return; // 只对执行进行劫持
+    }
+
+    if (data.__ob__ instanceof Observe) {
+      // 说明这个对象被代理过
+      return data.__ob__;
     }
 
     // 如果一个对象被劫持过了，那就不需要再被劫持了（要判断一个对象是否被劫持过，可以增添一个实例，用实例来判断是否被劫持过）
@@ -84,6 +149,38 @@
 
       // 初始化状态
       initState(vm);
+      if (options.el) {
+        vm.$mount(options.el); // 实现数据的挂载
+      }
+    };
+
+    Vue.prototype.$mount = function (el) {
+      const vm = this;
+      el = document.querySelector(el);
+      let ops = vm.$options;
+      if (!ops.render) {
+        // 先进行查找有没有 render
+        let template; // 没有render看一下是否写了template，没写 template 采用外部的 template
+        if (!ops.template && el) {
+          // 没有写模板 但是写了 el
+          template = el.outerHTML;
+        } else {
+          if (el) {
+            template = ops.template; // 如果有 el 则采用模板的内容
+          }
+        }
+
+        if (template) {
+          // 这里需要对模板进行编译
+          const render = compileToFunction(template);
+          ops.render = render; // jsx 最终会被编译成（'xxx'）
+        }
+      }
+
+      ops.render; // 最终就可以获取 render 方法
+
+      // script 标签引用的 vue.global.js 这个编译过程是在浏览器运行的
+      // runtime 是不包含模板编译的，整个编译是打包的时候通过 loader 来转义，vue文件的，用runtime的时候不能使用template
     };
   }
 

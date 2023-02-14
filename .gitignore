@@ -1,18 +1,4 @@
-.DS_Store
-node_modules/
-dist/
-dist.zip
-dist.7z
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-package-lock.json
-tests/**/coverage/
 
-# Editor directories and files
-.idea
-.vscode
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
+vue2/node_modules/
+vue2/dist/
+vue2/package-lock.json
