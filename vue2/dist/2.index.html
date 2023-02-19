@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div id="app">
+        <div>
+            {{name}}
+        </div>
+        <div>
+            {{age}}
+        </div>
+    </div>
+    <script src="vue.js"></script>
+    <script>
+        const vm = new Vue({
+            data: {
+                name: 'zf',
+                age: 20,
+                address: {
+                    num: 30,
+                    content: '回龙观'
+                },
+                hobby: ['eat', 'drink', { a: 1 }]
+            },
+            // el: '#app', // 我们要将数据 解析到 el 元素上
+            // template
+            // render () {}
+        });
+        vm.$mount('#app')
+        // 1. 模板引擎 性能差 需要正则匹配替换 1.0 的时候 没有引入虚拟 DOM 的改变
+        // 2. 采用虚拟 DOM，数据变化后比较虚拟 DOM 的差异 最后更新需要更新的地方
+        // 3. 核心就是我们需要将 模板变成我们的 js 语法，通过js语法生成虚拟DOM
+
+        // 从一个东西 变成 另一个东西 语法之间的转化 es6 -> es5
+        // css 压缩 我们需要先变成语法树再重新组装代码成为新的语法  将 template 语法转换成 render 函数 
+
+    </script>
+</body>
+
+</html>
