@@ -15,9 +15,50 @@
   // vue3 采用的不是使用正则
   // 对模板进行编译处理
   function parseHTML(html) {
-    // html 最开始肯定是一个 <
-    function start(tag, attrs) {}
-    function end(tag) {}
+    // html 最开始肯定是一个 <div></div>
+
+    const ELEMENT_TYPE = 1;
+    const TEXT_TYPE = 3;
+    const stack = []; // 用于存放元素的
+    let currentParent; // 指向的是栈中的最后一个
+    // 最终需要转化成一颗抽象语法树
+
+    function createASTElement(tag, attrs) {
+      return {
+        tag: tag,
+        type: ELEMENT_TYPE,
+        children: [],
+        attrs,
+        parent: null
+      };
+    }
+
+    // 利用栈型结构 来构造一棵树
+    function start(tag, attrs) {
+      let node = createASTElement(tag, attrs); // 创造一个 ast 节点
+
+      if (currentParent) {
+        node.parent = currentParent; // 只赋予了 parent 属性
+        currentParent.children.push(node); // 还要让父亲记住自己
+      }
+
+      stack.push(node);
+      currentParent = node; // currentParent 为栈中的最后一个
+    }
+
+    function chars(text) {
+      // 文本直接放到当前指向的节点
+      text = text.replace(/\s/g, ''); // 如果空格超过 2 个就删除2个以上的
+      text && currentParent.children.push({
+        type: TEXT_TYPE,
+        text,
+        parent: currentParent
+      });
+    }
+    function end(tag) {
+      stack.pop(); // 弹出最后一个，校验标签是否合法
+      currentParent = stack[stack.length - 1];
+    }
     function advance(n) {
       html = html.substring(n);
     }
@@ -69,6 +110,7 @@
         let text = html.substring(0, textEnd); // 文本内容
 
         if (text) {
+          chars(text);
           advance(text.length); // 解析到的文本
         }
       }
