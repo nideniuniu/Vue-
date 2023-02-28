@@ -66,7 +66,37 @@
     }
 
     update() {
-      this.get(); // 重新渲染
+      queueWatcher(this); // 把当前的 watcher 暂存起来
+      // this.get(); // 重新渲染
+    }
+
+    run() {
+      this.get();
+    }
+  }
+  let queue = [];
+  let has = {};
+  let pending = false; // 防抖
+
+  function flushSchedulerQueue() {
+    let flushQueue = queue.slice(0);
+    queue = [];
+    has = {};
+    pending = false;
+    flushQueue.forEach(q => q.run()); // 在刷新的过程中可能还要新的watcher 重新放到 queue 中
+  }
+
+  function queueWatcher(watcher) {
+    const id = watcher.id;
+    if (!has[id]) {
+      queue.push(watcher);
+      has[id] = true;
+
+      // 不管 update 执行多少次，但最终只执行一轮刷新操作
+      if (!pending) {
+        setTimeout(flushSchedulerQueue, 0);
+        pending = true;
+      }
     }
   }
 
@@ -158,6 +188,7 @@
     Vue.prototype._v = function () {
       return createTextVNode(this, ...arguments);
     };
+    // _s(name) === {{name}}
     Vue.prototype._s = function (value) {
       if (typeof value !== 'object') return value;
       return JSON.stringify(value);

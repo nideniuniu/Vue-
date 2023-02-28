@@ -62,6 +62,7 @@ export function initLifeCycle(Vue) {
   Vue.prototype._v = function () {
     return createTextVNode(this, ...arguments)
   }
+  // _s(name) === {{name}}
   Vue.prototype._s = function (value) {
     if (typeof value !== 'object') return value;
     return JSON.stringify(value);
