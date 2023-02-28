@@ -10,7 +10,7 @@ function genProps(attrs) {
         let [key, value] = item.split(':')
         obj[key] = value;
       })
-      attr.obj = obj;
+      attr.value = obj;
     }
     str += `${attr.name}:${JSON.stringify(attr.value)},`
   }
@@ -74,6 +74,5 @@ export function compileToFunction(template) {
   let code = codegen(ast)
   code = `with(this){return ${code}}`
   let render = new Function(code); // 根据代码生成 render 函数
-
   return render;
 }

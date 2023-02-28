@@ -4,20 +4,150 @@
   (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.Vue = factory());
 })(this, (function () { 'use strict';
 
+  let id$1 = 0;
+  class Dep {
+    constructor() {
+      this.id = id$1++; // 属性的 dep 要收集 watcher
+      this.subs = []; // 这里存放着当前属性对应的watcher有哪些
+    }
+
+    depend() {
+      // 这里我们不希望放置重复的 watcher 而且刚才只是一个单向的关系 dep -> watcher
+      // watcher 记录 dep
+      // this.subs.push(Dep.target);
+
+      Dep.target.addDep(this); // 让 watcher 记住 dep
+
+      // dep 和 watcher 是一个多对多的关系（一个属性可以在多个组件中使用 dep -> 多个 watcher）
+      // 一个组件中由多个属性组成（一个watcher 对应多个dep）
+    }
+
+    addSub(watcher) {
+      this.subs.push(watcher);
+    }
+    notify() {
+      this.subs.forEach(watcher => watcher.update()); // 告诉 watcher 更新
+    }
+  }
+
+  Dep.target = null;
+
+  let id = 0;
+
+  // 1）当我们创建渲染 watcher 的时候我们会把当前的渲染的 watcher 放到 dep.target 上
+  // 2）调用 _render() 会取值 走到get上
+
+  // 每个属性有一个 dep（属性计算被观察者），watcher 就是观察者（属性变化了会通知观察着更新）-> 观察者模式
+
+  class Watcher {
+    // 不同组件有不同的 watcher  目前只有一个 渲染根实例的
+    constructor(vm, fn, options) {
+      this.id = id++;
+      this.renderWatcher = options; // 是一个渲染 watcher
+      this.getter = fn; // getter 意味着调用这个函数可以发生取值操作
+      this.deps = []; // 后续我们实现计算属性，和一些清理工作需要用到
+      this.depsId = new Set();
+      this.get();
+    }
+    get() {
+      Dep.target = this; // 静态属性就是只有一份
+      this.getter(); // 会去 vm 取值
+      Dep.target = null; // 渲染完成后就清空
+    }
+
+    addDep(dep) {
+      // 一个组件对应着多个属性，重复的属性也不用记录
+      let id = dep.id;
+      if (!this.depsId.has(id)) {
+        this.deps.push(dep);
+        this.depsId.add(id);
+        dep.addSub(this); // watcher 已经记住了dep 而且去重了，此时让 dep 也记住 watcher
+      }
+    }
+
+    update() {
+      this.get(); // 重新渲染
+    }
+  }
+
   // h() _c()
-  function createElementVNode(vm, tag, props = {}, ...children) {
+  function createElementVNode(vm, tag, data, ...children) {
+    if (data == null) {
+      data = {};
+    }
+    let key = data.key;
+    if (key) delete data.key;
+    return vnode(vm, tag, key, data, children);
+  }
+  function createTextVNode(vm, text) {
+    return vnode(vm, undefined, undefined, undefined, undefined, text);
+  }
+
+  // ast 做的是语法层面的转换，描述的是语法本身（描述js，css，html）
+  // 虚拟DOM描述的是dom元素，可以增加一下自定义属性（描述DOM）
+  function vnode(vm, tag, key, data, children, text) {
     return {
       vm,
       tag,
-      props,
-      children
+      key,
+      data,
+      children,
+      text
     };
   }
-  function createTextVNode() {}
 
+  function createElm(vnode) {
+    let {
+      tag,
+      data,
+      children,
+      text
+    } = vnode;
+    if (typeof tag === 'string') {
+      // 标签
+      vnode.el = document.createElement(tag); // 这里将真实节点和虚拟节点对应起来，后续如果修改属性了
+
+      patchProps(vnode.el, data);
+      children.forEach(child => {
+        vnode.el.appendChild(createElm(child));
+      });
+    } else {
+      vnode.el = document.createTextNode(text);
+    }
+    return vnode.el;
+  }
+  function patchProps(el, props) {
+    for (let key in props) {
+      if (key === 'style') {
+        for (let styleName in props.style) {
+          el.style[styleName] = props.style[styleName];
+        }
+      } else {
+        el.setAttribute(key, props[key]);
+      }
+    }
+  }
+  function patch(oldVNode, vnode) {
+    // 写的是初渲染流程
+
+    const isRealElement = oldVNode.nodeType;
+    if (isRealElement) {
+      const elm = oldVNode; // 获取真实元素
+      const parentElm = elm.parentNode; // 拿到父元素
+      let newElm = createElm(vnode);
+      parentElm.insertBefore(newElm, elm.nextSibling);
+      parentElm.removeChild(elm); // 删除老节点
+
+      return newElm;
+    }
+  }
   function initLifeCycle(Vue) {
-    Vue.prototype._update = function () {
-      console.log('update');
+    Vue.prototype._update = function (vnode) {
+      // 将vnode转换为真实DOM
+      const vm = this;
+      const el = vm.$el;
+      // patch 既有初始化的功能 又有更新的逻辑
+      vm.$el = patch(el, vnode);
     };
 
     // _c('div', {}, children)
@@ -29,19 +159,28 @@
       return createTextVNode(this, ...arguments);
     };
     Vue.prototype._s = function (value) {
+      if (typeof value !== 'object') return value;
       return JSON.stringify(value);
     };
     Vue.prototype._render = function () {
       const vm = this;
       // 让 with 中的 this 指向 vm
+      // 当渲染的时候会去实例中取值，我们就可以将属性和视图绑定在一起
       return vm.$options.render.call(vm); // 通过 ast 语法转义后生成的 render 方法
     };
   }
 
   function mountComponent(vm, el) {
+    // 这里的 el 是通过 querySelector 处理过的
+    vm.$el = el;
+
     // 1. 调用 render 方法产生虚拟节点 虚拟 DOM
 
-    vm._update(vm._render()); // vm.$options.render() 虚拟节点
+    const updateComponent = () => {
+      vm._update(vm._render()); // vm.$options.render() 虚拟节点
+    };
+
+    new Watcher(vm, updateComponent, true); // true 用于标识是一个渲染过程
 
     // 2. 根据虚拟DOM产生真实DOM
 
@@ -51,7 +190,6 @@
   // vue 核心流程 1） 创造了响应式数据 2）模板转换成ast语法树
   // 3）将ast语法树转换成 render 函数
   // 4）后续每次数据更新可以只执行render函数 （无需再次执行ast转化的过程）
-
   // render函数会去产生虚拟节点（使用响应式数据）
   // 根据生成的虚拟节点创造真实DOM
 
@@ -181,7 +319,7 @@
           let [key, value] = item.split(':');
           obj[key] = value;
         });
-        attr.obj = obj;
+        attr.value = obj;
       }
       str += `${attr.name}:${JSON.stringify(attr.value)},`;
     }
@@ -236,7 +374,6 @@
     let code = codegen(ast);
     code = `with(this){return ${code}}`;
     let render = new Function(code); // 根据代码生成 render 函数
-
     return render;
   }
 
@@ -306,9 +443,14 @@
   function defineReactive(target, key, value) {
     // 闭包 属性劫持
     observe(value); // 对所有的对象都进行属性劫持
+    let dep = new Dep(); // 每一个属性都有一个 dep
     Object.defineProperty(target, key, {
       get() {
         // 取值的时候 会执行 get
+        if (Dep.target) {
+          dep.depend(); // 让这个属性的收集器记住当前的 watcher
+        }
+
         return value;
       },
       set(newValue) {
@@ -316,14 +458,16 @@
         if (newValue === value) return;
         observe(newValue);
         value = newValue;
+        dep.notify(); // 通知更新
       }
     });
   }
+
   function observe(data) {
     // 对这个对象进行劫持
 
     if (typeof data !== 'object' || data == null) {
-      return; // 只对执行进行劫持
+      return; // 只对对象进行劫持
     }
 
     if (data.__ob__ instanceof Observe) {
@@ -405,7 +549,7 @@
         }
       }
 
-      mountComponent(vm); // 组件的挂载
+      mountComponent(vm, el); // 组件的挂载
       // 最终就可以获取 render 方法
       // script 标签引用的 vue.global.js 这个编译过程是在浏览器运行的
       // runtime 是不包含模板编译的，整个编译是打包的时候通过 loader 来转义，vue文件的，用runtime的时候不能使用template

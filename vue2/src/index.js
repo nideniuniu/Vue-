@@ -1,4 +1,4 @@
-import { initLifeCycle } from '../lifecycle';
+import { initLifeCycle } from './lifecycle';
 import { initMixin } from './init'
 
 // 将所有的方法都耦合在一起
