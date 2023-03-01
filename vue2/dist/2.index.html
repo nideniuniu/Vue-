@@ -14,12 +14,7 @@
     <!-- 让 dep 记住这个 watcher 即可，稍后属性变化了可以找到对应的 dep 中存放的 watcher 进行重新渲染 -->
     <!-- 观察者模式 -->
     <div id="app" style="color: red;background: oldlace;">
-        <div>
-            {{name}} 223 {{age}}
-        </div>
-        <div>
-            {{age}}
-        </div>
+        {{name}} 223 {{age}}{{age}}
     </div>
     <script src="vue.js"></script>
     <script>
@@ -38,12 +33,22 @@
             // render () {}
         });
         vm.$mount('#app')
-        setTimeout(() => {
-            vm.name = '111'
-            vm.name = '22'
-            vm.name = '13311'
-            vm.name = '44'
-        }, 1000);
+        // setTimeout(() => {
+        //     vm.name = '111'
+        //     vm.name = '22'
+        //     vm.name = '13311'
+        //     vm .name = '44'
+        // }, 1000);
+
+        //  nextTick 不是创建了一个异步任务，而是将这个任务添加到队列中
+
+        vm.name = 'jw'; // 不会立即重新渲染页面
+
+
+        vm.$nextTick(() => {
+            console.log(app.innerHTML); // 同步获取
+        })
+
         // 1. 模板引擎 性能差 需要正则匹配替换 1.0 的时候 没有引入虚拟 DOM 的改变
         // 2. 采用虚拟 DOM，数据变化后比较虚拟 DOM 的差异 最后更新需要更新的地方
         // 3. 核心就是我们需要将 模板变成我们的 js 语法，通过js语法生成虚拟DOM
@@ -59,7 +64,7 @@
         // 4) 将虚拟dom渲染成真实dom
 
         // 1.观察者模式实现依赖收集
-        // 2.异步更新策略 
+        // 2.异步更新策略
         // 3.mixin的实现原理
     </script>
 </body>

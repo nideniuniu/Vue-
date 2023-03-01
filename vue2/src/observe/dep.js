@@ -19,7 +19,7 @@ class Dep {
     this.subs.push(watcher);
   }
   notify() {
-    this.subs.forEach(watcher=> watcher.update()); // 告诉 watcher 更新
+    this.subs.forEach(watcher => watcher.update()); // 告诉 watcher 更新
   }
 }
 Dep.target = null;

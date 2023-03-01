@@ -58,9 +58,51 @@ function queueWatcher(watcher) {
 
     // 不管 update 执行多少次，但最终只执行一轮刷新操作
     if (!pending) {
-      setTimeout(flushSchedulerQueue, 0);
+      nextTick(flushSchedulerQueue);
       pending = true;
     }
+  }
+}
+
+let callback = [];
+let waiting = false;
+function flushCallBack() {
+  let cbs = callback.slice(0);
+  waiting = false;
+  callback = [];
+  cbs.forEach(cb => cb()); // 按照顺序依次执行
+}
+
+// nextTick 没有使用某个 api 而是采用优雅降级的方式
+// 内部先采用的是 promise （ie不兼容） MutationObserve(h5) 可以考虑 ie 专享的 setTmmediate setTimeout
+
+let timerFuc;
+if (Promise) {
+  timerFuc = (cb) => {
+    Promise.resolve().then(flushCallBack)
+  }
+} else if (MutationObserver) {
+  let observe = new MutationObserver(flushCallBack) // 这里传入的回调是异步执行的
+  let textNode = document.createTextNode(1);
+  observe.observe(textNode, {
+    characterData: true
+  })
+  timerFuc = () => {
+    textNode.textContent = 2;
+  }
+} else if (setTmmediate) {
+  setImmediate(flushCallBack);
+} else {
+  timerFuc = () => {
+    setTimeout(flushCallBack);
+  }
+}
+
+export function nextTick(cb) { // 先内部还是先用户？
+  callback.push(cb); // 维护 nextTick 中的 callback 方法
+  if (!waiting) {
+    timerFuc();
+    waiting = true;
   }
 }
 
