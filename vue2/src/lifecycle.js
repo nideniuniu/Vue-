@@ -97,3 +97,10 @@ export function mountComponent(vm, el) { // 这里的 el 是通过 querySelector
 // 4）后续每次数据更新可以只执行render函数 （无需再次执行ast转化的过程）
 // render函数会去产生虚拟节点（使用响应式数据）
 // 根据生成的虚拟节点创造真实DOM
+
+export function callHook(vm, hook) { // 调用钩子函数
+  const handlers = vm.$options[hook]
+  if (handlers) {
+    handlers.forEach(handler => handler.call(vm))
+  }
+}

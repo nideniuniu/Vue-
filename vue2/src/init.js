@@ -1,6 +1,7 @@
-import { mountComponent } from './lifecycle';
+import { callHook, mountComponent } from './lifecycle';
 import { compileToFunction } from './compiler';
 import { initState } from './state';
+import { mergeOptions } from './utils';
 
 export function initMixin(Vue) { // 就是给 Vue 增加 init 方法
   Vue.prototype._init = function (options) {
@@ -8,10 +9,15 @@ export function initMixin(Vue) { // 就是给 Vue 增加 init 方法
 
     // 我们使用的 vue 的时候 以 $ 开头为 vue 的属性
     const vm = this;
-    vm.$options = options; // 将用户的选项挂载到实例上
+
+    // 我们定义的全局指令和过滤器.... 都会挂载到实力上
+    vm.$options = mergeOptions(this.constructor.options, options); // 将用户的选项挂载到实例上
+
+    callHook(vm, 'beforeCreate') // 内部调用的是 beforeCreate 写错了就不执行了
 
     // 初始化状态
     initState(vm)
+    callHook(vm, 'created')
 
     if (options.el) {
       vm.$mount(options.el); // 实现数据的挂载

@@ -37,6 +37,9 @@ methods.forEach(method => {
       // 对新增的内容再次进行观测
       ob.ObserveArray(inserted);
     }
+
+    // 走到这里
+    ob.dep.notify(); // 数组变化 通知对应的 watcher 更新组件
     return result;
   }
 })

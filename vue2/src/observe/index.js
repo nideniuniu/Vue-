@@ -3,6 +3,12 @@ import Dep from "./dep";
 
 class Observe {
   constructor(data) {
+
+    // 给每个对象都增加收集功能
+    this.dep = new Dep(); // 所有对象都要增加 dep
+
+    // 这个data 可能数组或者对象
+
     // Object.defineProperty 只能劫持已经存在的属性（vue里面会为此单独写一些 api $set $delete）
 
     Object.defineProperty(data, '__ob__', {
@@ -30,14 +36,31 @@ class Observe {
   }
 }
 
+// 深层次嵌套要递归，递归多了性能差，不存在的属性监控不到，存在的属性要重写方法
+function dependArray(value) {
+  for (let i = 0; i < value.length; i++) {
+    let current = value[i]
+    current.__ob__ && current.__ob__.dep.depend();
+    if (Array.isArray(current)) {
+      dependArray(current);
+    }
+  }
+}
 
 export function defineReactive(target, key, value) { // 闭包 属性劫持
-  observe(value); // 对所有的对象都进行属性劫持
+  let childOb = observe(value); // 对所有的对象都进行属性劫持 childOb.dep 用来收集依赖
   let dep = new Dep(); // 每一个属性都有一个 dep
   Object.defineProperty(target, key, {
     get() { // 取值的时候 会执行 get
-      if(Dep.target) {
+      if (Dep.target) {
         dep.depend(); // 让这个属性的收集器记住当前的 watcher
+        if (childOb) {
+          childOb.dep.depend(); // 让数组和对象本身也实现依赖收集
+
+          if (Array.isArray(value)) {
+            dependArray(value);
+          }
+        }
       }
       return value
     },
@@ -58,8 +81,8 @@ export function observe(data) {
   if (typeof data !== 'object' || data == null) {
     return; // 只对对象进行劫持
   }
-  
-  if(data.__ob__ instanceof Observe) { // 说明这个对象被代理过
+
+  if (data.__ob__ instanceof Observe) { // 说明这个对象被代理过
     return data.__ob__;
   }
 

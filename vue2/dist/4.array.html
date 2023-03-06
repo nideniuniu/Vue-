@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <!-- 这里取值的时候会调用JSON.stringfy() 会对数组中的对象取值 所以对象会收集依赖 -->
+  <div id="app" style="color:red;background:yellow">
+    {{arr}} {{a}}
+  </div>
+  <script src="vue.js"></script>
+  <script>
+    const vm = new Vue({
+      data: {
+        name: 'zf',
+        age: 20,
+        arr: [100, 200, { a: 1 }], // 给数组本身增加 dep 如果数组新增了某一项 我可以触发dep更新
+        a: {a: 1}, // 给对象也增加dep，如果后续用户增加了属性，我可以触发dep更新
+      },
+    });
+    vm.$mount('#app')
+
+    // 这里要注意的是，你改变的不是 arr 属性，而是arr对象的数组对象
+    vm.arr.a = 100;
+    vm.a.a = 123
+
+    vm.arr.push('223')
+
+  </script>
+</body>
+
+</html>

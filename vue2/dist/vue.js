@@ -265,6 +265,14 @@
   // render函数会去产生虚拟节点（使用响应式数据）
   // 根据生成的虚拟节点创造真实DOM
 
+  function callHook(vm, hook) {
+    // 调用钩子函数
+    const handlers = vm.$options[hook];
+    if (handlers) {
+      handlers.forEach(handler => handler.call(vm));
+    }
+  }
+
   const ncname = `[a-zA-Z_][\\-\\.0-9_a-zA-Z]*`;
   const qnameCapture = `((?:${ncname}\\:)?${ncname})`;
   const startTagOpen = new RegExp(`^<${qnameCapture}`); // 他匹配到的分组是一个 标签名  <xxx 匹配到的是开始 标签的名字
@@ -480,12 +488,20 @@
         // 对新增的内容再次进行观测
         ob.ObserveArray(inserted);
       }
+
+      // 走到这里
+      ob.dep.notify(); // 数组变化 通知对应的 watcher 更新组件
       return result;
     };
   });
 
   class Observe {
     constructor(data) {
+      // 给每个对象都增加收集功能
+      this.dep = new Dep(); // 所有对象都要增加 dep
+
+      // 这个data 可能数组或者对象
+
       // Object.defineProperty 只能劫持已经存在的属性（vue里面会为此单独写一些 api $set $delete）
 
       Object.defineProperty(data, '__ob__', {
@@ -512,17 +528,34 @@
       data.forEach(item => observe(item));
     }
   }
+
+  // 深层次嵌套要递归，递归多了性能差，不存在的属性监控不到，存在的属性要重写方法
+  function dependArray(value) {
+    for (let i = 0; i < value.length; i++) {
+      let current = value[i];
+      current.__ob__ && current.__ob__.dep.depend();
+      if (Array.isArray(current)) {
+        dependArray(current);
+      }
+    }
+  }
   function defineReactive(target, key, value) {
     // 闭包 属性劫持
-    observe(value); // 对所有的对象都进行属性劫持
+    let childOb = observe(value); // 对所有的对象都进行属性劫持 childOb.dep 用来收集依赖
     let dep = new Dep(); // 每一个属性都有一个 dep
     Object.defineProperty(target, key, {
       get() {
         // 取值的时候 会执行 get
         if (Dep.target) {
           dep.depend(); // 让这个属性的收集器记住当前的 watcher
-        }
+          if (childOb) {
+            childOb.dep.depend(); // 让数组和对象本身也实现依赖收集
 
+            if (Array.isArray(value)) {
+              dependArray(value);
+            }
+          }
+        }
         return value;
       },
       set(newValue) {
@@ -582,6 +615,50 @@
     }
   }
 
+  const strats = {};
+  const LIFECYCLE = ['beforeCreate', 'created'];
+  LIFECYCLE.forEach(hook => {
+    strats[hook] = function (p, c) {
+      //  {} {created:function(){}}   => {created:[fn]}
+      // {created:[fn]}  {created:function(){}} => {created:[fn,fn]}
+      if (c) {
+        // 如果儿子有 父亲有   让父亲和儿子拼在一起
+        if (p) {
+          return p.concat(c);
+        } else {
+          return [c]; // 儿子有父亲没有 ，则将儿子包装成数组
+        }
+      } else {
+        return p; // 如果儿子没有则用父亲即可
+      }
+    };
+  });
+
+  function mergeOptions(parent, child) {
+    const options = {};
+    for (let key in parent) {
+      // 循环老的  {}
+      mergeField(key);
+    }
+    for (let key in child) {
+      // 循环老的   {a:1}
+      if (!parent.hasOwnProperty(key)) {
+        mergeField(key);
+      }
+    }
+    function mergeField(key) {
+      // 策略模式 用策略模式减少if /else
+      if (strats[key]) {
+        options[key] = strats[key](parent[key], child[key]);
+      } else {
+        // 如果不在策略中则以儿子为主
+        options[key] = child[key] || parent[key]; // 优先采用儿子，在采用父亲
+      }
+    }
+
+    return options;
+  }
+
   function initMixin(Vue) {
     // 就是给 Vue 增加 init 方法
     Vue.prototype._init = function (options) {
@@ -589,10 +666,15 @@
 
       // 我们使用的 vue 的时候 以 $ 开头为 vue 的属性
       const vm = this;
-      vm.$options = options; // 将用户的选项挂载到实例上
+
+      // 我们定义的全局指令和过滤器.... 都会挂载到实力上
+      vm.$options = mergeOptions(this.constructor.options, options); // 将用户的选项挂载到实例上
+
+      callHook(vm, 'beforeCreate'); // 内部调用的是 beforeCreate 写错了就不执行了
 
       // 初始化状态
       initState(vm);
+      callHook(vm, 'created');
       if (options.el) {
         vm.$mount(options.el); // 实现数据的挂载
       }
@@ -628,6 +710,17 @@
     };
   }
 
+  function initGlobalAPI(Vue) {
+    // 静态方法
+
+    Vue.options = {};
+    Vue.mixin = function (mixin) {
+      // 我们期望将用户的选项和 全局的options进行合并 '
+      this.options = mergeOptions(this.options, mixin);
+      return this;
+    };
+  }
+
   // 将所有的方法都耦合在一起
   function Vue(options) {
     // options 就是用户的选项
@@ -637,6 +730,7 @@
   Vue.prototype.$nextTick = nextTick;
   initMixin(Vue); // 扩展了 init 方法
   initLifeCycle(Vue);
+  initGlobalAPI(Vue);
 
   return Vue;
 
