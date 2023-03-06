@@ -30,7 +30,7 @@ class Observe {
   walk(data) { // 循环对象 对属性依次劫持
     // 重新定义属性
     Object.keys(data).forEach(key => defineReactive(data, key, data[key]));
-  }
+  } 
   ObserveArray(data) {
     data.forEach(item => observe(item))
   }
